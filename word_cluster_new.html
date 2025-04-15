@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Topic Word Cloud Visualization</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+<style>
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Tektur, monospace;
+  background-color: #2E3650;
+  color: white;
+}
+#container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+#visualization {
+  margin-top: 20px;
+  background-color: #1D253F;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 500px;
+  position: relative;
+}
+#container h1 {
+  font-family: 'Tektur', monospace;
+  font-weight: 600;
+}
+#loading, #error {
+  text-align: center;
+  padding: 20px;
+  font-size: 18px;
+  font-family: 'Tektur', monospace;
+}
+#error {
+  color: #E9538A;
+  display: none;
+}
+.tooltip {
+  position: absolute;
+  visibility: hidden;
+  background-color: rgba(20, 20, 40, 0.9);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  pointer-events: none;
+  font-family: 'Tektur', monospace;
+  font-size: 14px;
+  max-width: 300px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+/* Controls Styles */
+.control-panel {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #242B45;
+  border-radius: 8px;
+}
+.control-panel h3 {
+  margin: 0 0 10px 0;
+  color: #00F49E;
+  font-family: 'Tektur', monospace;
+}
+.control-option {
+  padding: 8px 15px;
+  margin: 5px;
+  background-color: #1D253F;
+  border: 1px solid #3D4B6D;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-family: 'Tektur', monospace;
+  transition: all 0.2s ease;
+}
+.control-option:hover {
+  background-color: #3D4B6D;
+}
+.control-option.active {
+  background-color: #008FD6;
+  border-color: #008FD6;
+}
+.control-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.control-label {
+  margin-right: 10px;
+  font-family: 'Tektur', monospace;
+}
+/* Topic filter styles */
+#topic-search {
+  width: 250px;
+  padding: 8px;
+  background-color: #1D253F;
+  border: 1px solid #3D4B6D;
+  border-radius: 4px;
+  color: white;
+  font-family: 'Tektur', monospace;
+}
+#status {
+  margin-left: 10px;
+  font-size: 14px;
+  color: #00F49E;
+}
+#status.error {
+  color: #E9538A;
+}
+.debug-info {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: rgba(0,0,0,0.2);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+/* Zoom Controls */
+.zoom-controls {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: flex;
+  flex-direction: column;
+  background-color: rgba(20, 20, 40, 0.7);
+  border-radius: 5px;
+  padding: 5px;
+  z-index: 10;
+}
+.zoom-button {
+  background-color: #1D253F;
+  color: white;
+  border: 1px solid #3D4B6D;
+  border-radius: 4px;
+  width: 40px;
+  height: 40px;
+  margin: 2px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.zoom-button:hover {
+  background-color: #3D4B6D;
+}
+.zoom-button:active {
+  background-color: #008FD6;
+}
+.reset-button {
+  width: 84px;
+  font-size: 14px;
+  text-align: center;
+}
+/* Highlight Node Effect */
+.node circle:hover {
+  stroke-width: 3px;
+  stroke-opacity: 1;
+  fill-opacity: 0.9;
+}
+.node text:hover {
+  font-weight: bold;
+}
+</style>
+</head>
+<body>
+<div id="container">
+<h1>Topic Word Cloud</h1>
+
+<!-- Control Panel -->
+<div class="control-panel">
+  <h3>Topic Controls</h3>
+  
+  <div class="control-row">
+    <div>
+      <span class="control-label">Search Topics:</span>
+      <input type="text" id="topic-search" placeholder="Search for topics..." />
+    </div>
+    
+    <div>
+      <span class="control-label">Min Count:</span>
+      <input type="range" id="count-filter" min="1" max="100" value="1" />
+      <span id="count-value">1</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <div>
+      <span class="control-label">Timeframe:</span>
+      <button class="control-option active" data-period="all">All Time</button>
+      
+      <span class="control-label">From</span>
+      <input type="date" id="start-date" name="start-date">
+      <span class="control-label">To</span>
+      <input type="date" id="end-date" name="end-date">
+      <button id="apply-date-range" class="control-option">Apply</button>
+    </div>
+    
+    <div id="status"></div>
+  </div>
+  
+  <!-- Debug Info Panel (hidden by default) -->
+  <div class="debug-info" id="debug-info" style="display:none;"></div>
+  <button id="toggle-debug" class="control-option">Show Debug Info</button>
+</div>
+
+<div id="error"></div>
+<div id="visualization">
+  <div id="loading">Loading visualization...</div>
+  <!-- Zoom controls will be added here dynamically -->
+</div>
+</div>
+
+<div class="tooltip"></div>
+
+<script>
+// Topic Word Cloud with Zooming functionality
+document.addEventListener('DOMContentLoaded', function() {
+  // Global state
+  let topicDetails = [];
+  let combinedData = [];
+  let processedData = [];
+  let currentTimeframe = 'all';
+  let startDate = null;
+  let endDate = null;
+  let searchTerm = '';
+  let minCount = 1;
+  let svg = null;
+  let zoom = null;
+  let activeZoom = null;
+  
+  // Debug functionality
+  const debugInfo = document.getElementById('debug-info');
+  const toggleDebug = document.getElementById('toggle-debug');
+  
+  toggleDebug.addEventListener('click', function() {
+    if (debugInfo.style.display === 'none') {
+      debugInfo.style.display = 'block';
+      this.textContent = 'Hide Debug Info';
+      updateDebugInfo();
+    } else {
+      debugInfo.style.display = 'none';
+      this.textContent = 'Show Debug Info';
+    }
+  });
+  
+  function updateDebugInfo() {
+    if (debugInfo.style.display === 'none') return;
+    
+    debugInfo.innerHTML = `
+Topics loaded: ${topicDetails.length}
+Combined data: ${combinedData.length} records
+Processed data: ${processedData.length} topics
+Current filters: 
+- Timeframe: ${currentTimeframe}
+- Search: "${searchTerm}"
+- Min Count: ${minCount}
+- Date range: ${startDate ? startDate.toLocaleDateString() : 'none'} to ${endDate ? endDate.toLocaleDateString() : 'none'}
+
+First 3 topics (if available):
+${JSON.stringify(topicDetails.slice(0, 3), null, 2)}
+
+First 3 processed items (if available):
+${JSON.stringify(processedData.slice(0, 3), null, 2)}
+
+Current zoom transform: ${activeZoom ? `scale(${activeZoom.k.toFixed(2)}, translate(${activeZoom.x.toFixed(0)},${activeZoom.y.toFixed(0)}))` : 'None'}
+`;
+  }
+  
+  // Set up event listeners
+  function setupEventListeners() {
+    // Set initial dates
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+    
+    document.getElementById('start-date').valueAsDate = oneMonthAgo;
+    document.getElementById('end-date').valueAsDate = today;
+    
+    // Count filter
+    const countFilter = document.getElementById('count-filter');
+    const countValue = document.getElementById('count-value');
+    
+    countFilter.addEventListener('input', function() {
+      countValue.textContent = this.value;
+      minCount = parseInt(this.value);
+      processData();
+    });
+    
+    // Topic search
+    document.getElementById('topic-search').addEventListener('input', function() {
+      searchTerm = this.value;
+      processData();
+    });
+    
+    // All Time button
+    document.querySelector('.control-option[data-period="all"]').addEventListener('click', function() {
+      currentTimeframe = 'all';
+      startDate = null;
+      endDate = null;
+      
+      // Update UI
+      this.classList.add('active');
+      
+      processData();
+    });
+    
+    // Custom date range
+    document.getElementById('apply-date-range').addEventListener('click', function() {
+      const startDateInput = document.getElementById('start-date').value;
+      const endDateInput = document.getElementById('end-date').value;
+      
+      if (startDateInput && endDateInput) {
+        // Remove active class from All Time button
+        document.querySelector('.control-option[data-period="all"]').classList.remove('active');
+        
+        // Set current timeframe to custom
+        currentTimeframe = 'custom';
+        startDate = new Date(startDateInput);
+        endDate = new Date(endDateInput);
+        endDate.setHours(23, 59, 59); // Set to end of day
+        
+        processData();
+      } else {
+        alert('Please select both start and end dates');
+      }
+    });
+  }
+  
+  // Load topic data
+  async function loadTopicData() {
+    try {
+      const response = await fetch('topic_detail_new.csv');
+      if (response.ok) {
+        const csvData = await response.text();
+        
+        // Parse the CSV
+        const parsed = Papa.parse(csvData, {
+          header: true,
+          skipEmptyLines: true,
+          dynamicTyping: true
+        });
+        
+        topicDetails = parsed.data;
+        updateStatus(`Loaded ${topicDetails.length} topics`);
+        console.log("Loaded topic details:", topicDetails.length);
+        return topicDetails;
+      } else {
+        throw new Error("Failed to fetch topic_detail_new.csv");
+      }
+    } catch (error) {
+      console.error("Error loading topic details:", error);
+      showError(`Error loading topic details: ${error.message}`);
+      
+      // Create mock topic data for testing
+      const mockTopics = [];
+      for (let i = 1; i <= 50; i++) {
+        mockTopics.push({
+          Topic: i,
+          Name: `Topic ${i}`,
+          Count: Math.floor(Math.random() * 100) + 10,
+          KeyBERT: `keyword1, keyword2, keyword${i}`,
+          llama_extract: `This is a mock description for topic ${i}`
+        });
+      }
+      
+      updateStatus(`Using ${mockTopics.length} mock topics`);
+      topicDetails = mockTopics;
+      return mockTopics;
+    }
+  }
+  
+  // Load combined data
+  async function loadCombinedData() {
+    try {
+      // First try combined_df_new.csv
+      try {
+        const response = await fetch('combined_df_new.csv');
+        if (response.ok) {
+          const csvData = await response.text();
+          
+          // Parse the CSV
+          const parsed = Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true
+          });
+          
+          combinedData = parsed.data;
+          updateStatus(`Loaded combined data: ${combinedData.length} records`);
+          console.log("Loaded combined data:", combinedData.length);
+          return combinedData;
+        }
+      } catch (e) {
+        console.log("Error fetching combined_df_new.csv, trying fallback");
+      }
+      
+      // Fallback to out_40k.csv
+      try {
+        const fallbackResponse = await fetch('out_40k.csv');
+        if (fallbackResponse.ok) {
+          const csvData = await fallbackResponse.text();
+          
+          // Parse the CSV
+          const parsed = Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true
+          });
+          
+          combinedData = parsed.data;
+          updateStatus(`Loaded fallback data: ${combinedData.length} records`);
+          console.log("Loaded fallback data:", combinedData.length);
+          return combinedData;
+        }
+      } catch (e) {
+        console.log("Error fetching out_40k.csv");
+      }
+      
+      // If we get here, both datasets failed to load
+      throw new Error("Failed to fetch any data");
+    } catch (error) {
+      console.error("Error loading combined data:", error);
+      updateStatus(`Error loading data: ${error.message}`, true);
+      
+      // Create mock combined data for testing
+      const mockData = [];
+      for (let i = 0; i < 1000; i++) {
+        const randomTopic = Math.floor(Math.random() * 50) + 1;
+        const sentiment = Math.random() > 0.5 ? 'positive' : 'negative';
+        
+        mockData.push({
+          id: i,
+          topic: randomTopic,
+          sentiment_label: sentiment,
+          sentiment_score: sentiment === 'positive' ? 0.7 + Math.random() * 0.3 : Math.random() * 0.3,
+          timestamp: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28)).toISOString()
+        });
+      }
+      
+      updateStatus(`Using ${mockData.length} mock records`);
+      combinedData = mockData;
+      return mockData;
+    }
+  }
+  
+  // Process data for visualization
+  function processData() {
+    updateStatus("Processing data...");
+    document.getElementById('loading').style.display = 'block';
+    
+    // Filter by search term
+    let filtered = [...topicDetails];
+    
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(topic => {
+        if (topic.Name && typeof topic.Name === 'string' && topic.Name.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        if (topic.KeyBERT && typeof topic.KeyBERT === 'string' && topic.KeyBERT.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    // Filter by minimum count
+    filtered = filtered.filter(topic => {
+      const count = topic.Count || 0;
+      return count >= minCount;
+    });
+    
+    // Apply date filtering if needed
+    if (currentTimeframe === 'custom' && startDate && endDate && combinedData.length > 0) {
+      // Filter combined data by date
+      const filteredCombinedData = combinedData.filter(row => {
+        if (!row.timestamp) return false;
+        const rowDate = new Date(row.timestamp);
+        return !isNaN(rowDate) && rowDate >= startDate && rowDate <= endDate;
+      });
+      
+      // Count topic occurrences in the filtered data
+      const topicCounts = {};
+      filteredCombinedData.forEach(row => {
+        const topicId = row.topic !== undefined ? row.topic : (row.new_topic !== undefined ? row.new_topic : null);
+        if (topicId !== null) {
+          topicCounts[topicId] = (topicCounts[topicId] || 0) + 1;
+        }
+      });
+      
+      // Update the Count in the filtered topics
+      filtered = filtered.map(topic => {
+        const topicId = topic.Topic;
+        // Make a copy to avoid modifying the original data
+        return {
+          ...topic,
+          Count: topicCounts[topicId] || 0
+        };
+      });
+      
+      // Filter out topics with zero count or below minimum
+      filtered = filtered.filter(topic => {
+        const count = topic.Count || 0;
+        return count >= minCount;
+      });
+    }
+    
+    // Sort by Count and take top 50
+    filtered = filtered.sort((a, b) => {
+      const countA = a.Count || 0;
+      const countB = b.Count || 0;
+      return countB - countA;
+    }).slice(0, 50);
+    
+    // Process for visualization
+    processedData = filtered.map(topic => {
+      // Get sentiment data from combined data if available
+      let sentimentData = { positive: 0, negative: 0, neutral: 0 };
+      let dominantSentiment = 'neutral';
+      
+      if (combinedData.length > 0) {
+        // Filter combined data for this topic
+        const topicData = combinedData.filter(row => {
+          // Handle different ways the topic might be stored
+          const rowTopic = row.topic !== undefined ? row.topic : (row.new_topic !== undefined ? row.new_topic : null);
+          return rowTopic == topic.Topic; // Use loose equality for string/number comparison
+        });
+        
+        // Count sentiments
+        topicData.forEach(row => {
+          if (row.sentiment_label) {
+            const sentiment = String(row.sentiment_label).toLowerCase();
+            if (sentiment.includes('positive')) {
+              sentimentData.positive++;
+            } else if (sentiment.includes('negative')) {
+              sentimentData.negative++;
+            } else {
+              sentimentData.neutral++;
+            }
+          }
+        });
+        
+        // Determine dominant sentiment
+        if (sentimentData.positive > sentimentData.negative && sentimentData.positive > sentimentData.neutral) {
+          dominantSentiment = 'positive';
+        } else if (sentimentData.negative > sentimentData.positive && sentimentData.negative > sentimentData.neutral) {
+          dominantSentiment = 'negative';
+        }
+      }
+      
+      return {
+        id: topic.Topic,
+        text: topic.Name || `Topic ${topic.Topic}`,
+        value: topic.Count || 10, // Use a minimum value of 10 to ensure visibility
+        keywords: topic.KeyBERT || '',
+        llama_extract: topic.llama_extract || '',
+        sentimentCounts: sentimentData,
+        sentimentLabel: dominantSentiment
+      };
+    });
+    
+    updateDebugInfo();
+    
+    // Create visualization if we have data
+    if (processedData.length > 0) {
+      createVisualization(processedData);
+      updateStatus(`Showing ${processedData.length} topics`);
+    } else {
+      document.getElementById('visualization').innerHTML = '<div style="padding: 40px; text-align: center;">No data available with current filters</div>';
+      updateStatus("No topics match current filters", true);
+    }
+  }
+  
+  // Create visualization with zoom support
+  function createVisualization(data) {
+    document.getElementById('loading').style.display = 'none';
+    
+    // Clear existing visualization
+    const container = d3.select("#visualization");
+    container.selectAll("*").remove();
+    
+    const width = container.node().getBoundingClientRect().width || 800;
+    const height = 600;
+    
+    // Create SVG with zoom support
+    svg = container.append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", `0 0 ${width} ${height}`);
+    
+    // Add zoom functionality
+    zoom = d3.zoom()
+      .scaleExtent([0.5, 10]) // Limit zoom scale from 0.5x to 10x
+      .on("zoom", zoomed);
+    
+    svg.call(zoom);
+    
+    // Create a background rect to handle zoom clicks on empty space
+    svg.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', '#242B45')
+      .style('pointer-events', 'all');
+    
+    // Create a group that will be transformed by zoom
+    const zoomableGroup = svg.append("g")
+      .attr("class", "zoomable");
+    
+    // Add zoom control buttons
+    addZoomControls(container);
+    
+    // Sentiment colors
+    const sentimentColors = {
+      'positive': '#008FD6', // Blue for positive
+      'negative': '#E9538A', // Pink for negative
+      'neutral': '#AF9FFF'   // Purple for neutral
+    };
+    
+    // Get tooltip element
+    const tooltip = d3.select(".tooltip");
+    
+    // Compute size scale - ensure a minimum size
+    const minValue = d3.min(data, d => d.value) || 1;
+    const maxValue = d3.max(data, d => d.value) || 100;
+    
+    const sizeScale = d3.scaleSqrt()
+      .domain([minValue, maxValue])
+      .range([30, 120])
+      .clamp(true);
+    
+    // Create force simulation
+    const simulation = d3.forceSimulation(data)
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collide', d3.forceCollide().radius(d => sizeScale(d.value) / 1.8))
+      .force('charge', d3.forceManyBody().strength(-10))
+      .force('x', d3.forceX(width / 2).strength(0.1))
+      .force('y', d3.forceY(height / 2).strength(0.1));
+    
+    // Run the simulation in steps
+    for (let i = 0; i < 100; i++) {
+      simulation.tick();
+    }
+    
+    // Add legend (not affected by zoom)
+    const legend = svg.append('g')
+      .attr('class', 'legend')
+      .attr('transform', `translate(${width - 150}, ${height - 90})`);
+      
+    legend.append('rect')
+      .attr('x', 0)
+      .attr('y', 0)
+      .attr('width', 16)
+      .attr('height', 16)
+      .attr('fill', sentimentColors['positive']);
+      
+    legend.append('text')
+      .attr('x', 24)
+      .attr('y', 12)
+      .attr('fill', '#fff')
+      .style('font-size', '14px')
+      .style('font-family', "'Tektur', monospace")
+      .text('Positive');
+      
+    legend.append('rect')
+      .attr('x', 0)
+      .attr('y', 24)
+      .attr('width', 16)
+      .attr('height', 16)
+      .attr('fill', sentimentColors['neutral']);
+      
+    legend.append('text')
+      .attr('x', 24)
+      .attr('y', 36)
+      .attr('fill', '#fff')
+      .style('font-size', '14px')
+      .style('font-family', "'Tektur', monospace")
+      .text('Neutral');
+      
+    legend.append('rect')
+      .attr('x', 0)
+      .attr('y', 48)
+      .attr('width', 16)
+      .attr('height', 16)
+      .attr('fill', sentimentColors['negative']);
+      
+    legend.append('text')
+      .attr('x', 24)
+      .attr('y', 60)
+      .attr('fill', '#fff')
+      .style('font-size', '14px')
+      .style('font-family', "'Tektur', monospace")
+      .text('Negative');
+    
+    // Add title (not affected by zoom)
+    svg.append('text')
+      .attr('x', width / 2)
+      .attr('y', 40)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#00F49E')
+      .style('font-size', '24px')
+      .style('font-weight', 'bold')
+      .style('font-family', "'Tektur', monospace")
+      .text('Topic Word Cloud')
+      .style('pointer-events', 'none');
+    
+    // Create node groups within the zoomable container
+    const nodes = zoomableGroup.selectAll('.node')
+      .data(data)
+      .enter()
+      .append('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x}, ${d.y})`);
+    
+    // Add circles
+    nodes.append('circle')
+      .attr('r', d => sizeScale(d.value) / 2)
+      .attr('fill', d => sentimentColors[d.sentimentLabel])
+      .attr('fill-opacity', 0.7)
+      .attr('stroke', d => sentimentColors[d.sentimentLabel])
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', 0.9)
+      .on('mouseover', function(event, d) {
+        // Prepare tooltip content
+        const sentimentInfo = `<br>Sentiment: ${d.sentimentCounts.positive} positive, ${d.sentimentCounts.negative} negative, ${d.sentimentCounts.neutral} neutral`;
+        
+        // Create keywords display (truncated)
+        const keywordsDisplay = d.keywords 
+          ? `<br><br>Keywords: ${d.keywords.length > 100 ? d.keywords.slice(0, 100) + '...' : d.keywords}` 
+          : '';
+          
+        // Create llama extract display (truncated)
+        const llamaExtract = d.llama_extract
+          ? `<br><br>Description: ${d.llama_extract.length > 100 ? d.llama_extract.slice(0, 100) + '...' : d.llama_extract}`
+          : '';
+        
+        // Show tooltip
+        tooltip
+          .html(`<strong>${d.text}</strong><br>
+                Count: ${d.value}${sentimentInfo}${keywordsDisplay}${llamaExtract}`)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 20) + "px")
+          .style("visibility", "visible");
+      })
+      .on('mouseout', function() {
+        // Hide tooltip
+        tooltip.style("visibility", "hidden");
+      })
+      .on('click', function(event, d) {
+        // Center view on the clicked node with a bit of zoom
+        const transform = d3.zoomIdentity
+          .translate(width / 2, height / 2)
+          .scale(2.5)
+          .translate(-d.x, -d.y);
+          
+        svg.transition()
+          .duration(750)
+          .call(zoom.transform, transform);
+      });
+    
+    // Add text labels
+    nodes.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '.3em')
+      .attr('fill', '#fff')
+      .style('font-family', "'Tektur', monospace")
+      .style('font-weight', d => d.value > maxValue / 3 ? 'bold' : 'normal')
+      .style('pointer-events', 'none') // Make text not block clicks
+      .text(d => d.text)
+      .each(function(d) {
+        // Simple text sizing
+        const circle_radius = sizeScale(d.value) / 2;
+        const text = d3.select(this);
+        
+        // Set font size based on node size
+        const fontSize = Math.max(10, Math.min(circle_radius / 2, 16));
+        text.style('font-size', `${fontSize}px`);
+        
+        // Check if text is too wide
+        const textLength = this.getComputedTextLength();
+        const availableWidth = circle_radius * 1.8;
+        
+        if (textLength > availableWidth) {
+          // Truncate text if too long
+          let textContent = d.text;
+          while (textLength > availableWidth && textContent.length > 3) {
+            textContent = textContent.slice(0, -1);
+            text.text(textContent + '...');
+            if (this.getComputedTextLength() <= availableWidth) break;
+          }
+        }
+      });
+    
+    // Zoom handler function
+    function zoomed(event) {
+      activeZoom = event.transform;
+      zoomableGroup.attr("transform", activeZoom);
+      
+      // Update debug info on zoom
+      updateDebugInfo();
+    }
+  }
+  
+  // Add zoom control buttons
+  function addZoomControls(container) {
+    const zoomControls = container.append("div")
+      .attr("class", "zoom-controls");
+    
+    // Zoom in button
+    zoomControls.append("button")
+      .attr("class", "zoom-button")
+      .attr("title", "Zoom In")
+      .text("+")
+      .on("click", function() {
+        // Zoom in
+        svg.transition()
+          .duration(300)
+          .call(zoom.scaleBy,
