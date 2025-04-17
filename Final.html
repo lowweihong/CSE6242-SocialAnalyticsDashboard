@@ -1,0 +1,2222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Social Analytics Dashboard</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .chart {
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 4px;
+      min-height: 550px; /* Increased minimum height */
+      position: relative;
+    }
+    .chart h3.chart-title {
+      margin: 0 0 20px 0;
+      text-align: center;
+      color: #333;
+      font-size: 16px;
+      z-index: 2;
+      position: relative;
+    }
+    .chart svg {
+      position: absolute;
+      top: 60px;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 80px);
+    }
+    .chart-full {
+      grid-column: 1 / -1;
+      min-height: 400px;
+    }
+    .line {
+      fill: none;
+      stroke: steelblue;
+      stroke-width: 2;
+    }
+    .area {
+      opacity: 0.7;
+    }
+    .bubble {
+      fill-opacity: 0.7;
+      stroke: #fff;
+    }
+    .axis-label {
+      font-size: 12px;
+      fill: #666;
+    }
+    .tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 12px;
+      z-index: 1000;
+    }
+    .filters {
+      grid-column: 1 / -1;
+      background: #fff;
+      padding: 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .filter-group label {
+      font-weight: bold;
+      color: #333;
+    }
+    select, input {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: #4a90e2;
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+    }
+    @media (max-width: 1200px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+      
+      .chart {
+        min-height: 400px;
+      }
+    }
+    @media (max-width: 768px) {
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .chart {
+        min-height: 350px;
+      }
+    }
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      text-align: center;
+      z-index: 1000;
+    }
+    .error-message {
+      color: #e74c3c;
+      padding: 10px;
+      margin: 10px 0;
+      background: #fdf0ed;
+      border: 1px solid #e74c3c;
+      border-radius: 4px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 30px;
+    }
+    .modal {
+      background: rgba(0, 0, 0, 0.5);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    /* Word Cloud specific styles */
+    #wordCloudContainer {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .node circle:hover {
+      stroke-width: 3px;
+      stroke-opacity: 1;
+      fill-opacity: 0.9;
+    }
+    .node text:hover {
+      font-weight: bold;
+    }
+    .zoom-controls {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      display: flex;
+      flex-direction: column;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 5px;
+      padding: 5px;
+      z-index: 10;
+    }
+    .zoom-button {
+      background-color: #fff;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      width: 30px;
+      height: 30px;
+      margin: 2px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .zoom-button:hover {
+      background-color: #f0f0f0;
+    }
+    .zoom-button:active {
+      background-color: #e0e0e0;
+    }
+    .reset-button {
+      width: 64px;
+      font-size: 12px;
+      text-align: center;
+    }
+    #wordCloudLoading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    /* Topic Sentiment Heatmap styles */
+    .tooltip-header {
+      font-weight: bold;
+      margin-bottom: 5px;
+      border-bottom: 1px solid rgba(200,200,200,0.2);
+      padding-bottom: 3px;
+    }
+    
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+    }
+    
+    .tooltip-label {
+      margin-right: 10px;
+      font-weight: 600;
+    }
+    
+    .heatmap-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .filter-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .filter-label {
+      margin-right: 10px;
+    }
+    
+    #topic-selector {
+      max-width: 250px;
+    }
+    
+    .loading-indicator {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,0,0,.1);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: 10px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .heatmap-cell {
+      transition: all 0.2s;
+    }
+    
+    #heatmap-status {
+      font-size: 12px;
+      color: #666;
+      margin: 5px 0;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const startDateInput = document.getElementById('startDate');
+      const endDateInput = document.getElementById('endDate');
+      const sentimentFilterSelect = document.getElementById('sentimentFilter');
+
+      // Set date filter range
+      const minDate = "2007-04-19T07:14:38+00:00";
+      const maxDate = "2019-11-23T15:44:33+00:00";
+
+      startDateInput.min = minDate.split('T')[0];
+      startDateInput.max = maxDate.split('T')[0];
+      endDateInput.min = minDate.split('T')[0];
+      endDateInput.max = maxDate.split('T')[0];
+
+      // Set default values
+      startDateInput.value = minDate.split('T')[0];
+      endDateInput.value = maxDate.split('T')[0];
+
+      // Add filter event listeners
+      startDateInput.addEventListener('change', updateCharts);
+      endDateInput.addEventListener('change', updateCharts);
+      sentimentFilterSelect.addEventListener('change', updateCharts);
+
+      // Function to update charts
+      function updateCharts() {
+        const startDate = new Date(startDateInput.value);
+        const endDate = new Date(endDateInput.value);
+        const selectedSentiment = sentimentFilterSelect.value;
+
+        if (startDate > endDate) {
+          alert("Start date cannot be later than end date!");
+          return;
+        }
+
+        // Filter data - date filtering
+        let filteredData = testData.sentiment.filter(d => {
+          return d.timestamp >= startDate && d.timestamp <= endDate;
+        });
+
+        // Sentiment category filtering
+        if (selectedSentiment !== 'all') {
+          filteredData = filteredData.filter(d => {
+            return d.sentiment_label === selectedSentiment;
+          });
+        }
+
+        if (filteredData.length === 0) {
+          alert("No data matches the criteria!");
+          return;
+        }
+
+        // Update charts
+        createSentimentLineChart(filteredData);
+        createStackedAreaChart(filteredData);
+        createHeatmapChart(filteredData);
+      }
+    });
+  </script>
+</head>
+<body>
+  <h1>Bitcoin Social Sentiment Analysis Dashboard</h1>
+  
+  <div id="loadingIndicator" class="loading" style="display: none;">
+    Loading data, please wait...
+  </div>
+  
+  <div id="errorContainer" class="error-message" style="display: none;"></div>
+  
+  <div class="dashboard">
+    <div class="filters">
+      <div class="filter-group">
+        <label>Time Range:</label>
+        <input type="date" id="startDate">
+        <input type="date" id="endDate">
+      </div>
+      <div class="filter-group">
+        <label>Sentiment Category:</label>
+        <select id="sentimentFilter">
+          <option value="all">All</option>
+          <option value="positive">Positive</option>
+          <option value="neutral">Neutral</option>
+          <option value="negative">Negative</option>
+        </select>
+      </div>
+    </div>
+    
+    <div id="sentimentLineChart" class="chart chart-full">
+      <h3 class="chart-title">Bitcoin Social Sentiment Trend</h3>
+    </div>
+    <div id="stackedAreaChart" class="chart chart-full">
+      <h3 class="chart-title">Sentiment Distribution Trend</h3>
+    </div>
+    <div id="topicBubbleChart" class="chart">
+      <h3 class="chart-title">Topic Distribution and Keywords</h3>
+      <div id="wordCloudContainer">
+        <div id="wordCloudLoading">Loading word cloud visualization...</div>
+      </div>
+    </div>
+    <div id="heatmapChart" class="chart">
+      <h3 class="chart-title">Weekly Sentiment Activity Distribution</h3>
+    </div>
+  </div>
+
+  <script>
+    // Show loading indicator
+    function showLoading(show = true) {
+      document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+    }
+
+    // Show error message
+    function showError(message) {
+      const errorContainer = document.getElementById('errorContainer');
+      if (message) {
+        errorContainer.textContent = message;
+        errorContainer.style.display = 'block';
+      } else {
+        errorContainer.style.display = 'none';
+      }
+    }
+
+    // Create tooltip
+    const tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    // Add test data
+    const testData = {
+      sentiment: Array.from({ length: 100 }, (_, i) => ({
+        timestamp: new Date(2007, 3, 19 + Math.floor(i * (4628 / 100))),
+        sentiment: 0.3 + Math.random() * 0.4,
+        sentiment_label: Math.random() > 0.5 ? "positive" : (Math.random() > 0.5 ? "neutral" : "negative"),
+        topic: ["Bitcoin Price", "Market Trends", "Regulatory Policies", "Technology Development"][Math.floor(Math.random() * 4)],
+        text: "Test data " + (i + 1)
+      }))
+    };
+
+    // Modify data loading function
+    async function loadData() {
+      showLoading(true);
+      showError(null);
+      
+      try {
+        console.log('Starting data loading...');
+        
+        let sentimentData, topicData;
+        
+        try {
+          [sentimentData, topicData] = await Promise.all([
+            d3.csv("combined_df_new_test.csv"),
+            d3.csv("topic_detail_new_test.csv")
+          ]);
+        } catch (error) {
+          console.warn('Using test data set:', error);
+          sentimentData = testData.sentiment;
+          topicData = [];
+        }
+
+        console.log('Original sentiment data:', sentimentData.length, 'records');
+        if (topicData) console.log('Original topic data:', topicData.length, 'records');
+        console.log('Data sample:', sentimentData[0]);
+
+        // Data preprocessing
+        const validData = sentimentData
+          .filter(d => {
+            const isValid = d.timestamp && d.sentiment_score;
+            if (!isValid) {
+              console.log('Invalid data:', d);
+            }
+            return isValid;
+          })
+          .map(d => {
+            const parsed = {
+              timestamp: new Date(d.timestamp),
+              sentiment: parseFloat(d.sentiment_score),
+              sentiment_label: d.sentiment_label,
+              topic: d.topic,
+              text: d.text
+            };
+            if (isNaN(parsed.timestamp.getTime()) || isNaN(parsed.sentiment)) {
+              console.log('Failed parsing data:', d);
+            }
+            return parsed;
+          })
+          .filter(d => !isNaN(d.timestamp) && !isNaN(d.sentiment))
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        console.log('Valid data:', validData.length, 'records');
+        console.log('Valid data sample:', validData[0]);
+
+        if (validData.length === 0) {
+          throw new Error('No valid data points');
+        }
+
+        // Process topic data
+        const topicSummary = d3.rollup(validData,
+          v => ({
+            count: v.length,
+            avgSentiment: d3.mean(v, d => d.sentiment)
+          }),
+          d => d.topic
+        );
+
+        console.log('Topic summary:', Array.from(topicSummary.entries()));
+
+        // Check container elements
+        const containers = ['sentimentLineChart', 'stackedAreaChart', 'topicBubbleChart', 'heatmapChart'];
+        containers.forEach(id => {
+          const container = document.getElementById(id);
+          if (!container) {
+            console.error(`Container element not found: ${id}`);
+          } else {
+            console.log(`Container ${id} dimensions:`, container.clientWidth, 'x', container.clientHeight);
+          }
+        });
+
+        // Create all charts
+        try {
+          console.log('Starting line chart creation...');
+          createSentimentLineChart(validData);
+          
+          console.log('Starting stacked area chart creation...');
+          createStackedAreaChart(validData);
+          
+          console.log('Starting topic bubble chart replacement with word cloud...');
+          // Initialize the word cloud visualization
+          initWordCloudViz();
+          
+          console.log('Starting heatmap creation...');
+          createHeatmapChart(validData);
+          
+          console.log('All charts created');
+        } catch (error) {
+          console.error('Chart creation error:', error);
+          throw error;
+        }
+
+        // Set filter initial dates to data set time range
+        const startDate = new Date("2007-04-19T07:14:38Z");
+        const endDate = new Date("2019-11-23T15:44:33Z");
+        
+        document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+        document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+
+        // If data loaded successfully, we'll use the actual time range of the data
+        if (validData.length > 0) {
+        const timeExtent = d3.extent(validData, d => d.timestamp);
+          // Ensure time range doesn't exceed the actual range of the dataset
+        document.getElementById('startDate').value = timeExtent[0].toISOString().split('T')[0];
+        document.getElementById('endDate').value = timeExtent[1].toISOString().split('T')[0];
+        }
+
+      } catch (error) {
+        console.error('Error details:', error);
+        showError('Data loading error: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // Start application
+    document.addEventListener('DOMContentLoaded', loadData);
+
+    // Add data validation function
+    function validateData(data) {
+      if (!Array.isArray(data)) {
+        console.error('Data is not an array');
+        return false;
+      }
+      
+      if (data.length === 0) {
+        console.error('Data array is empty');
+        return false;
+      }
+      
+      const requiredFields = ['timestamp', 'sentiment', 'sentiment_label', 'topic', 'text'];
+      const sample = data[0];
+      
+      const missingFields = requiredFields.filter(field => !(field in sample));
+      if (missingFields.length > 0) {
+        console.error('Data missing required fields:', missingFields);
+        return false;
+      }
+      
+      return true;
+    }
+
+    function createSentimentLineChart(data) {
+      try {
+        if (!validateData(data)) {
+          throw new Error('Data validation failed');
+        }
+        const container = document.getElementById("sentimentLineChart");
+        if (!container) {
+          throw new Error('Line chart container element not found');
+        }
+
+        // Clear existing content
+        d3.select("#sentimentLineChart svg").remove();
+        
+        const width = container.clientWidth - 80;
+        const height = container.clientHeight - 100;
+        const margin = {top: 20, right: 40, bottom: 50, left: 50};
+        
+        const svg = d3.select("#sentimentLineChart")
+          .append("svg")
+          .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+          .append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        const x = d3.scaleTime()
+                    .domain(d3.extent(data, d => d.timestamp))
+                    .range([0, width]);
+        
+        const y = d3.scaleLinear()
+                    .domain([0, 1])
+                    .range([height, 0]);
+        
+        const line = d3.line()
+                       .x(d => x(d.timestamp))
+                       .y(d => y(d.sentiment))
+                       .curve(d3.curveMonotoneX);
+        
+        // Add X axis
+        svg.append("g")
+           .attr("transform", `translate(0,${height})`)
+           .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%m/%Y")))
+           .selectAll("text")
+           .style("text-anchor", "end")
+           .attr("dx", "-.8em")
+           .attr("dy", ".15em")
+           .attr("transform", "rotate(-45)");
+        
+        // Add Y axis
+        svg.append("g")
+           .call(d3.axisLeft(y));
+        
+        // Add X axis label
+        svg.append("text")
+           .attr("class", "axis-label")
+           .attr("x", width / 2)
+           .attr("y", height + margin.bottom - 5)
+           .style("text-anchor", "middle")
+           .text("Time");
+        
+        // Add Y axis label
+        svg.append("text")
+           .attr("class", "axis-label")
+           .attr("transform", "rotate(-90)")
+           .attr("x", -height / 2)
+           .attr("y", -margin.left + 15)
+           .style("text-anchor", "middle")
+           .text("Sentiment Score");
+        
+        // Add line
+        const path = svg.append("path")
+           .datum(data)
+           .attr("class", "line")
+           .attr("d", line);
+
+        // Add interactive elements
+        const focus = svg.append("g")
+           .attr("class", "focus")
+           .style("display", "none");
+        
+        // Add a circle to track the nearest data point
+        focus.append("circle")
+           .attr("r", 5)
+           .style("fill", "steelblue")
+           .style("stroke", "white");
+        
+        // Add a vertical reference line
+        focus.append("line")
+           .attr("class", "x-hover-line")
+           .attr("y1", 0)
+           .attr("y2", height)
+           .style("stroke", "#ddd")
+           .style("stroke-width", "1px")
+           .style("stroke-dasharray", "3,3");
+        
+        // Add interaction area
+        svg.append("rect")
+           .attr("class", "overlay")
+           .attr("width", width)
+           .attr("height", height)
+           .style("fill", "none")
+           .style("pointer-events", "all")
+           .on("mouseover", () => focus.style("display", null))
+           .on("mouseout", () => {
+             focus.style("display", "none");
+             tooltip.transition().duration(300).style("opacity", 0);
+           })
+           .on("mousemove", mousemove);
+        
+        // Mouse move handler function
+        function mousemove(event) {
+          const bisect = d3.bisector(d => d.timestamp).left;
+          const x0 = x.invert(d3.pointer(event)[0]);
+          const i = bisect(data, x0, 1);
+          const d0 = data[i - 1];
+          const d1 = data[i];
+          
+          // Find the data point closest to the mouse position
+          const d = x0 - d0.timestamp > d1.timestamp - x0 ? d1 : d0;
+          
+          // Update circle position
+          focus.attr("transform", `translate(${x(d.timestamp)},${y(d.sentiment)})`);
+          
+          // Update vertical line position
+          focus.select(".x-hover-line").attr("transform", `translate(0,${-y(d.sentiment)})`);
+          
+          // Show tooltip
+          const dateFormat = d3.timeFormat("%Y-%m-%d");
+             tooltip.transition()
+             .duration(200)
+             .style("opacity", .9);
+          
+          tooltip.html(`
+            <strong>Date: ${dateFormat(d.timestamp)}</strong><br/>
+            Sentiment Score: ${d.sentiment.toFixed(3)}<br/>
+            Sentiment Category: ${d.sentiment_label}<br/>
+            ${d.text ? `<small>${d.text}</small>` : ''}
+          `)
+            .style("left", (event.pageX + 15) + "px")
+            .style("top", (event.pageY - 30) + "px");
+        }
+      } catch (error) {
+        console.error('Line chart creation error:', error);
+        throw error;
+      }
+    }
+
+    function createStackedAreaChart(data) {
+  try {
+    const container = document.getElementById("stackedAreaChart");
+    if (!container) {
+      throw new Error('Chart container element not found');
+    }
+
+    // Clear existing content
+    d3.select("#stackedAreaChart svg").remove();
+    
+    const width = container.clientWidth - 80;
+    const height = container.clientHeight - 100;
+    const margin = {top: 20, right: 40, bottom: 60, left: 60}; // Increased bottom margin for rotated labels
+    
+    const svg = d3.select("#stackedAreaChart")
+      .append("svg")
+      .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Use months for aggregation instead of weeks for better visualization
+    const parseTime = d3.timeMonth;
+    
+    // Sort data to ensure correct time order
+    data.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Create a mapping for sentiment category counts
+    const timeMap = new Map();
+    
+    // Calculate the month for each data point and count by sentiment category
+    data.forEach(d => {
+      const monthKey = parseTime(d.timestamp);
+      if (!timeMap.has(monthKey)) {
+        timeMap.set(monthKey, {
+          date: monthKey,
+          positive: 0,
+          neutral: 0,
+          negative: 0
+        });
+      }
+      
+      const entry = timeMap.get(monthKey);
+      if (d.sentiment_label === "positive") {
+        entry.positive += 1;
+      } else if (d.sentiment_label === "neutral") {
+        entry.neutral += 1;
+      } else if (d.sentiment_label === "negative") {
+        entry.negative += 1;
+      }
+    });
+    
+    // Convert to array and ensure sorted by date
+    let barData = Array.from(timeMap.values())
+      .sort((a, b) => a.date - b.date);
+    
+    // Take only last 12 time periods if there are too many data points
+    if (barData.length > 12) {
+      barData = barData.slice(-12);
+    }
+    
+    // Ensure data is available
+    if (barData.length < 2) {
+      svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height / 2)
+        .attr("text-anchor", "middle")
+        .text("Insufficient data to generate chart");
+      return;
+    }
+
+    // Prepare data for grouped bars
+    const groupedData = [];
+    barData.forEach(d => {
+      groupedData.push({
+        date: d.date,
+        category: "positive",
+        value: d.positive
+      });
+      groupedData.push({
+        date: d.date,
+        category: "neutral",
+        value: d.neutral
+      });
+      groupedData.push({
+        date: d.date,
+        category: "negative",
+        value: d.negative
+      });
+    });
+
+    // X scale for dates
+    const x0 = d3.scaleBand()
+      .domain(barData.map(d => d.date))
+      .range([0, width])
+      .padding(0.2);
+    
+    // X scale for sentiment categories within each date
+    const x1 = d3.scaleBand()
+      .domain(["positive", "neutral", "negative"])
+      .range([0, x0.bandwidth()])
+      .padding(0.05);
+
+    // Y scale
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(groupedData, d => d.value) * 1.1]) // Add 10% margin at top
+      .range([height, 0]);
+
+    // Define sentiment category colors
+    const color = d3.scaleOrdinal()
+      .domain(["positive", "neutral", "negative"])
+      .range(["#2ecc71", "#95a5a6", "#e74c3c"]);
+
+    // Create grouped bars
+    svg.append("g")
+      .selectAll("g")
+      .data(barData)
+      .join("g")
+      .attr("transform", d => `translate(${x0(d.date)},0)`)
+      .selectAll("rect")
+      .data(d => [
+        {category: "positive", value: d.positive, date: d.date},
+        {category: "neutral", value: d.neutral, date: d.date},
+        {category: "negative", value: d.negative, date: d.date}
+      ])
+      .join("rect")
+      .attr("x", d => x1(d.category))
+      .attr("y", d => y(d.value))
+      .attr("width", x1.bandwidth())
+      .attr("height", d => height - y(d.value))
+      .attr("fill", d => color(d.category))
+      .attr("rx", 3) // Rounded corners
+      .attr("ry", 3)
+      .on("mouseover", function(event, d) {
+        d3.select(this)
+          .style("opacity", 0.8)
+          .style("stroke", "#000")
+          .style("stroke-width", 1);
+          
+        tooltip.transition()
+          .duration(200)
+          .style("opacity", .9);
+        
+        const dateFormat = d3.timeFormat("%Y-%m");
+        const categoryLabel = d.category.charAt(0).toUpperCase() + d.category.slice(1);
+        
+        tooltip.html(`
+          <strong>Date: ${dateFormat(d.date)}</strong><br/>
+          Category: ${categoryLabel}<br/>
+          Count: ${d.value}
+        `)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 28) + "px");
+      })
+      .on("mouseout", function() {
+        d3.select(this)
+          .style("opacity", 1)
+          .style("stroke", "none");
+          
+        tooltip.transition()
+          .duration(500)
+          .style("opacity", 0);
+      });
+
+    // Add X axis with rotated labels
+    svg.append("g")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(x0).tickFormat(d3.timeFormat("%Y-%m")))
+      .selectAll("text")
+      .style("text-anchor", "end")
+      .attr("dx", "-.8em")
+      .attr("dy", ".15em")
+      .attr("transform", "rotate(-45)");
+
+    // Add Y axis
+    svg.append("g")
+      .call(d3.axisLeft(y))
+      .call(g => g.select(".domain").remove()); // Remove axis line for cleaner look
+
+    // Add Y axis grid lines
+    svg.append("g")
+      .attr("class", "grid")
+      .call(d3.axisLeft(y)
+        .tickSize(-width)
+        .tickFormat("")
+      )
+      .style("stroke-dasharray", "3,3")
+      .style("stroke-opacity", 0.2)
+      .select(".domain").remove();
+
+    // Add X axis label
+    svg.append("text")
+      .attr("class", "axis-label")
+      .attr("x", width / 2)
+      .attr("y", height + margin.bottom - 5)
+      .style("text-anchor", "middle")
+      .text("Time Period");
+      
+    // Add Y axis label
+    svg.append("text")
+      .attr("class", "axis-label")
+      .attr("transform", "rotate(-90)")
+      .attr("x", -height / 2)
+      .attr("y", -margin.left + 15)
+      .style("text-anchor", "middle")
+      .text("Count");
+
+    // Add legend
+    const legend = svg.append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${width - 120}, 0)`);
+
+    const legendData = [
+      {key: "positive", label: "Positive"},
+      {key: "neutral", label: "Neutral"},
+      {key: "negative", label: "Negative"}
+    ];
+
+    legendData.forEach((d, i) => {
+      const g = legend.append("g")
+        .attr("transform", `translate(0, ${i * 20})`);
+
+      g.append("rect")
+        .attr("width", 15)
+        .attr("height", 15)
+        .attr("rx", 2)
+        .attr("ry", 2)
+        .style("fill", color(d.key));
+
+      g.append("text")
+        .attr("x", 20)
+        .attr("y", 12)
+        .text(d.label);
+    });
+
+  } catch (error) {
+    console.error('Chart creation error:', error);
+    throw error;
+  }
+}
+
+    function createHeatmapChart(data) {
+      // Clear existing content
+      d3.select("#heatmapChart").selectAll("*").remove();
+      
+      const container = document.getElementById("heatmapChart");
+      const width = container.clientWidth - 100; // Reduce width to leave space for margins
+      const height = container.clientHeight - 100; // Increased height
+      const margin = {top: 50, right: 80, bottom: 60, left: 70}; // Increased all margins
+
+      const svg = d3.select("#heatmapChart")
+                    .append("svg")
+                    .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+                    .attr("preserveAspectRatio", "xMidYMid meet")
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      svg.append("text")
+         .attr("class", "chart-title")
+         .attr("x", width / 2)
+         .attr("y", -margin.top / 2)
+         .text("Weekly Sentiment Activity Distribution");
+
+      // Aggregate data by hour and day of the week
+      const heatmapData = d3.rollup(data,
+        v => ({
+          count: v.length,
+          avgSentiment: d3.mean(v, d => d.sentiment),
+          tweets: v // Save original tweet data
+        }),
+        d => d.timestamp.getHours(),
+        d => d.timestamp.getDay()
+      );
+
+      const hours = Array.from({length: 24}, (_, i) => i);
+      const days = Array.from({length: 7}, (_, i) => i);
+
+      const gridData = [];
+      hours.forEach(hour => {
+        days.forEach(day => {
+          const value = heatmapData.get(hour)?.get(day) || {count: 0, avgSentiment: 0, tweets: []};
+          gridData.push({
+            hour,
+            day,
+            ...value
+          });
+        });
+      });
+
+      const x = d3.scaleBand()
+        .domain(hours)
+        .range([0, width])
+        .padding(0.1);
+
+      const y = d3.scaleBand()
+        .domain(days)
+        .range([0, height])
+        .padding(0.1);
+
+      // Use a better color scheme
+      const color = d3.scaleSequential()
+        .domain([0, d3.max(gridData, d => d.count)])
+        .interpolator(d3.interpolateYlOrRd);
+
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+      // Add cells
+      svg.selectAll(".cell")
+         .data(gridData)
+         .enter()
+         .append("rect")
+         .attr("class", "cell")
+         .attr("x", d => x(d.hour))
+         .attr("y", d => y(d.day))
+         .attr("width", x.bandwidth())
+         .attr("height", y.bandwidth())
+         .style("fill", d => d.count > 0 ? color(d.count) : "#f8f9fa")
+         .style("stroke", "#fff")
+         .style("stroke-width", 1)
+         .on("mouseover", function(event, d) {
+           d3.select(this)
+             .style("stroke", "#000")
+             .style("stroke-width", 2);
+           
+           const sentimentLabel = d.avgSentiment ? getTopicSentimentLabel(d.avgSentiment) : "No Data";
+           const formattedHour = d.hour.toString().padStart(2, '0');
+           
+           tooltip.transition()
+             .duration(200)
+             .style("opacity", .9);
+           
+           tooltip.html(`
+             <strong>${dayNames[d.day]} ${formattedHour}:00</strong><br/>
+             <hr style="margin: 5px 0"/>
+             Tweet Count: ${d.count}<br/>
+             Avg Sentiment: ${d.avgSentiment ? d.avgSentiment.toFixed(3) : "N/A"}<br/>
+             Sentiment Tendency: ${sentimentLabel}<br/>
+             ${d.count > 0 ? "<small>Click to view details</small>" : ""}
+           `)
+             .style("left", (event.pageX + 10) + "px")
+             .style("top", (event.pageY - 28) + "px");
+         })
+         .on("mouseout", function() {
+           d3.select(this)
+             .style("stroke", "#fff")
+             .style("stroke-width", 1);
+           
+           tooltip.transition()
+             .duration(500)
+             .style("opacity", 0);
+         })
+         .on("click", function(event, d) {
+           if (d.count > 0) {
+             showTimeSlotDetail(d);
+           }
+         });
+
+      // Add axes
+      svg.append("g")
+         .attr("transform", `translate(0,${height})`)
+         .call(d3.axisBottom(x).tickFormat(d => `${d.toString().padStart(2, '0')}:00`))
+         .selectAll("text")
+         .style("text-anchor", "end")
+         .attr("dx", "-.8em")
+         .attr("dy", ".15em")
+         .attr("transform", "rotate(-45)");
+
+      svg.append("g")
+         .call(d3.axisLeft(y).tickFormat(d => dayNames[d]));
+
+      // Add legend
+      const legendWidth = 20;
+      const legendHeight = height;
+      const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width + 10}, 0)`); // Shift left 10px
+
+      const legendScale = d3.scaleLinear()
+        .domain([0, d3.max(gridData, d => d.count)])
+        .range([legendHeight, 0]);
+
+      const legendAxis = d3.axisRight(legendScale)
+        .ticks(5);
+
+      const legendGradient = legend.append("defs")
+        .append("linearGradient")
+        .attr("id", "heatmap-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "100%")
+        .attr("x2", "0%")
+        .attr("y2", "0%")
+        .selectAll("stop")
+        .data(d3.range(0, 1.1, 0.1))
+        .enter()
+        .append("stop")
+        .attr("offset", d => d * 100 + "%")
+        .attr("stop-color", d => color(d * d3.max(gridData, d => d.count)));
+
+      legend.append("rect")
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .style("fill", "url(#heatmap-gradient)");
+
+      legend.append("g")
+        .attr("transform", `translate(${legendWidth}, 0)`)
+        .call(legendAxis)
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 35)
+        .attr("dy", ".71em")
+        .style("text-anchor", "end")
+        .text("Tweet Count");
+    }
+
+    function showTimeSlotDetail(data) {
+      const modal = d3.select("body")
+        .append("div")
+        .attr("class", "modal")
+        .style("position", "fixed")
+        .style("left", "50%")
+        .style("top", "50%")
+        .style("transform", "translate(-50%, -50%)")
+        .style("background", "white")
+        .style("padding", "20px")
+        .style("border-radius", "8px")
+        .style("box-shadow", "0 4px 6px rgba(0,0,0,0.1)")
+        .style("z-index", "1000")
+        .style("max-width", "600px")
+        .style("width", "90%")
+        .style("max-height", "80vh")
+        .style("overflow-y", "auto");
+
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const formattedHour = data.hour.toString().padStart(2, '0');
+
+      modal.html(`
+        <h3 style="margin-top:0">${dayNames[data.day]} ${formattedHour}:00 Time Slot Analysis</h3>
+        <hr/>
+        <p><strong>Total Tweets:</strong> ${data.count}</p>
+        <p><strong>Avg Sentiment Score:</strong> ${data.avgSentiment.toFixed(3)}</p>
+        <p><strong>Sentiment Tendency:</strong> ${getTopicSentimentLabel(data.avgSentiment)}</p>
+        <hr/>
+        <h4>Tweet Examples:</h4>
+        <div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin: 10px 0;">
+          ${data.tweets.slice(0, 5).map(tweet => `
+            <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+              <p style="margin: 5px 0;">${tweet.text}</p>
+              <small style="color: #666;">Sentiment Score: ${tweet.sentiment.toFixed(3)}</small>
+            </div>
+          `).join('')}
+        </div>
+        <button onclick="this.parentElement.remove()" style="
+          padding: 8px 16px;
+          background: #4a90e2;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          margin-top: 10px;
+        ">Close</button>
+      `);
+    }
+
+    function getTopicSentimentLabel(sentiment) {
+      if (sentiment >= 0.6) return "Strongly Positive";
+      if (sentiment >= 0.5) return "Positive";
+      if (sentiment > 0.4) return "Neutral";
+      if (sentiment >= 0.3) return "Negative";
+      return "Strongly Negative";
+    }
+
+    // Add responsive handling on window resize
+    window.addEventListener('resize', function() {
+      // Get current data
+      const currentData = d3.select("#sentimentLineChart").datum();
+      if (currentData) {
+        createSentimentLineChart(currentData);
+        createStackedAreaChart(currentData);
+        createHeatmapChart(currentData);
+      }
+    });
+
+    // Word Cloud Visualization - From word_cluster_new.html
+    // Global variables for word cloud
+    let topicDetails = [];
+    let combinedData = [];
+    let processedData = [];
+    let wordCloudSvg = null;
+    let zoom = null;
+    let activeZoom = null;
+
+    async function initWordCloudViz() {
+      // Initialize the word cloud
+      try {
+        console.log("Initializing word cloud visualization...");
+        
+        // Load topic data
+        await loadTopicData();
+        
+        // Load combined data
+        await loadCombinedData();
+        
+        // Process data for visualization
+        processWordCloudData();
+        
+        console.log("Word cloud initialized successfully");
+      } catch (error) {
+        console.error("Word cloud initialization error:", error);
+        document.getElementById('wordCloudLoading').innerHTML = `
+          <div style="color: #e74c3c; padding: 10px;">
+            Error loading word cloud: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    async function loadTopicData() {
+      try {
+        const response = await fetch('topic_detail_new.csv');
+        if (response.ok) {
+          const csvData = await response.text();
+          
+          // Parse the CSV
+          const parsed = Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true
+          });
+          
+          topicDetails = parsed.data;
+          console.log("Loaded topic details:", topicDetails.length);
+          return topicDetails;
+        } else {
+          throw new Error("Failed to fetch topic_detail_new.csv");
+        }
+      } catch (error) {
+        console.error("Error loading topic details:", error);
+        
+        // Create mock topic data for testing
+        const mockTopics = [];
+        for (let i = 1; i <= 50; i++) {
+          mockTopics.push({
+            Topic: i,
+            Name: `Topic ${i}`,
+            Count: Math.floor(Math.random() * 100) + 10,
+            KeyBERT: `keyword1, keyword2, keyword${i}`,
+            llama_extract: `This is a mock description for topic ${i}`
+          });
+        }
+        
+        console.log("Using mock topics");
+        topicDetails = mockTopics;
+        return mockTopics;
+      }
+    }
+
+    async function loadCombinedData() {
+      try {
+        // First try combined_df_new.csv
+        try {
+          const response = await fetch('combined_df_new.csv');
+          if (response.ok) {
+            const csvData = await response.text();
+            
+            // Parse the CSV
+            const parsed = Papa.parse(csvData, {
+              header: true,
+              skipEmptyLines: true,
+              dynamicTyping: true
+            });
+            
+            combinedData = parsed.data;
+            console.log("Loaded combined data:", combinedData.length);
+            return combinedData;
+          }
+        } catch (e) {
+          console.log("Error fetching combined_df_new.csv, trying fallback");
+        }
+        
+        // Fallback to out_40k.csv
+        try {
+          const fallbackResponse = await fetch('out_40k.csv');
+          if (fallbackResponse.ok) {
+            const csvData = await fallbackResponse.text();
+            
+            // Parse the CSV
+            const parsed = Papa.parse(csvData, {
+              header: true,
+              skipEmptyLines: true,
+              dynamicTyping: true
+            });
+            
+            combinedData = parsed.data;
+            console.log("Loaded fallback data:", combinedData.length);
+            return combinedData;
+          }
+        } catch (e) {
+          console.log("Error fetching out_40k.csv");
+        }
+        
+        // If we get here, both datasets failed to load
+        throw new Error("Failed to fetch any data");
+      } catch (error) {
+        console.error("Error loading combined data:", error);
+        
+        // Create mock combined data for testing
+        const mockData = [];
+        for (let i = 0; i < 1000; i++) {
+          const randomTopic = Math.floor(Math.random() * 50) + 1;
+          const sentiment = Math.random() > 0.5 ? 'positive' : 'negative';
+          
+          mockData.push({
+            id: i,
+            topic: randomTopic,
+            sentiment_label: sentiment,
+            sentiment_score: sentiment === 'positive' ? 0.7 + Math.random() * 0.3 : Math.random() * 0.3,
+            timestamp: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28)).toISOString()
+          });
+        }
+        
+        console.log("Using mock data");
+        combinedData = mockData;
+        return mockData;
+      }
+    }
+
+    function processWordCloudData() {
+      console.log("Processing word cloud data...");
+      
+      // Filter by minimum count
+      let filtered = [...topicDetails];
+      
+      filtered = filtered.filter(topic => {
+        const count = topic.Count || 0;
+        return count >= 3; // Minimum count threshold
+      });
+      
+      // Sort by Count and take top 50
+      filtered = filtered.sort((a, b) => {
+        const countA = a.Count || 0;
+        const countB = b.Count || 0;
+        return countB - countA;
+      }).slice(0, 50);
+      
+      // Process for visualization
+      processedData = filtered.map(topic => {
+        // Get sentiment data from combined data if available
+        let sentimentData = { positive: 0, negative: 0, neutral: 0 };
+        let dominantSentiment = 'neutral';
+        
+        if (combinedData.length > 0) {
+          // Filter combined data for this topic
+          const topicData = combinedData.filter(row => {
+            const rowTopic = row.topic !== undefined ? row.topic : (row.new_topic !== undefined ? row.new_topic : null);
+            return rowTopic == topic.Topic; // Use loose equality for string/number comparison
+          });
+          
+          // Count sentiments
+          topicData.forEach(row => {
+            if (row.sentiment_label) {
+              const sentiment = String(row.sentiment_label).toLowerCase();
+              if (sentiment.includes('positive')) {
+                sentimentData.positive++;
+              } else if (sentiment.includes('negative')) {
+                sentimentData.negative++;
+              } else {
+                sentimentData.neutral++;
+              }
+            }
+          });
+          
+          // Determine dominant sentiment
+          if (sentimentData.positive > sentimentData.negative && sentimentData.positive > sentimentData.neutral) {
+            dominantSentiment = 'positive';
+          } else if (sentimentData.negative > sentimentData.positive && sentimentData.negative > sentimentData.neutral) {
+            dominantSentiment = 'negative';
+          }
+        }
+        
+        return {
+          id: topic.Topic,
+          text: topic.Name || `Topic ${topic.Topic}`,
+          value: topic.Count || 10, // Use a minimum value of 10 to ensure visibility
+          keywords: topic.KeyBERT || '',
+          llama_extract: topic.llama_extract || '',
+          sentimentCounts: sentimentData,
+          sentimentLabel: dominantSentiment
+        };
+      });
+      
+      // Create visualization if we have data
+      if (processedData.length > 0) {
+        createWordCloudVisualization(processedData);
+      } else {
+        document.getElementById('wordCloudLoading').innerHTML = '<div style="padding: 40px; text-align: center;">No word cloud data available</div>';
+      }
+    }
+
+    function createWordCloudVisualization(data) {
+      document.getElementById('wordCloudLoading').style.display = 'none';
+      
+      // Clear existing visualization
+      const container = d3.select("#wordCloudContainer");
+      container.selectAll("*").remove();
+      
+      // Add zoom controls
+      container.append("div")
+          .attr("class", "zoom-controls")
+          .html(`
+            <button class="zoom-button" id="zoom-in" title="Zoom In">+</button>
+            <button class="zoom-button" id="zoom-out" title="Zoom Out">-</button>
+            <button class="zoom-button reset-button" id="zoom-reset" title="Reset View">Reset</button>
+          `);
+      
+      const width = document.getElementById('wordCloudContainer').clientWidth;
+      const height = 500; // Fixed height for the word cloud
+      
+      // Create SVG with zoom support
+      wordCloudSvg = container.append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .attr("viewBox", `0 0 ${width} ${height}`);
+      
+      // Add zoom functionality
+      zoom = d3.zoom()
+          .scaleExtent([0.5, 10]) // Limit zoom scale from 0.5x to 10x
+          .on("zoom", zoomed);
+      
+      wordCloudSvg.call(zoom);
+      
+      // Create a background rect to handle zoom clicks on empty space
+      wordCloudSvg.append('rect')
+          .attr('width', width)
+          .attr('height', height)
+          .attr('fill', '#fff')
+          .style('pointer-events', 'all');
+      
+      // Create a group that will be transformed by zoom
+      const zoomableGroup = wordCloudSvg.append("g")
+          .attr("class", "zoomable");
+      
+      // Set up zoom control listeners
+      document.getElementById('zoom-in').addEventListener('click', function() {
+        wordCloudSvg.transition()
+          .duration(300)
+          .call(zoom.scaleBy, 1.3);
+      });
+      
+      document.getElementById('zoom-out').addEventListener('click', function() {
+        wordCloudSvg.transition()
+          .duration(300)
+          .call(zoom.scaleBy, 0.7);
+      });
+      
+      document.getElementById('zoom-reset').addEventListener('click', function() {
+        wordCloudSvg.transition()
+          .duration(300)
+          .call(zoom.transform, d3.zoomIdentity);
+      });
+      
+      // Sentiment colors
+      const sentimentColors = {
+        'positive': '#2ecc71', // Green for positive
+        'negative': '#e74c3c', // Red for negative
+        'neutral': '#95a5a6'   // Gray for neutral
+      };
+      
+      // Compute size scale - ensure a minimum size
+      const minValue = d3.min(data, d => d.value) || 1;
+      const maxValue = d3.max(data, d => d.value) || 100;
+      
+      const sizeScale = d3.scaleSqrt()
+        .domain([minValue, maxValue])
+        .range([30, 120])
+        .clamp(true);
+      
+      // Create force simulation
+      const simulation = d3.forceSimulation(data)
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collide', d3.forceCollide().radius(d => sizeScale(d.value) / 1.8))
+        .force('charge', d3.forceManyBody().strength(-10))
+        .force('x', d3.forceX(width / 2).strength(0.1))
+        .force('y', d3.forceY(height / 2).strength(0.1));
+      
+      // Run the simulation in steps
+      for (let i = 0; i < 100; i++) {
+        simulation.tick();
+      }
+      
+      // Add legend (not affected by zoom)
+      const legend = wordCloudSvg.append('g')
+        .attr('class', 'legend')
+        .attr('transform', `translate(${width - 120}, ${height - 90})`);
+        
+      legend.append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', 16)
+        .attr('height', 16)
+        .attr('fill', sentimentColors['positive']);
+        
+      legend.append('text')
+        .attr('x', 24)
+        .attr('y', 12)
+        .attr('fill', '#333')
+        .style('font-size', '12px')
+        .text('Positive');
+        
+      legend.append('rect')
+        .attr('x', 0)
+        .attr('y', 24)
+        .attr('width', 16)
+        .attr('height', 16)
+        .attr('fill', sentimentColors['neutral']);
+        
+      legend.append('text')
+        .attr('x', 24)
+        .attr('y', 36)
+        .attr('fill', '#333')
+        .style('font-size', '12px')
+        .text('Neutral');
+        
+      legend.append('rect')
+        .attr('x', 0)
+        .attr('y', 48)
+        .attr('width', 16)
+        .attr('height', 16)
+        .attr('fill', sentimentColors['negative']);
+        
+      legend.append('text')
+        .attr('x', 24)
+        .attr('y', 60)
+        .attr('fill', '#333')
+        .style('font-size', '12px')
+        .text('Negative');
+      
+      // Create node groups within the zoomable container
+      const nodes = zoomableGroup.selectAll('.node')
+        .data(data)
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .attr('transform', d => `translate(${d.x}, ${d.y})`);
+      
+      // Add circles
+      nodes.append('circle')
+        .attr('r', d => sizeScale(d.value) / 2)
+        .attr('fill', d => sentimentColors[d.sentimentLabel])
+        .attr('fill-opacity', 0.7)
+        .attr('stroke', d => sentimentColors[d.sentimentLabel])
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.9)
+        .on('mouseover', function(event, d) {
+          // Highlight the circle
+          d3.select(this)
+            .style('stroke-width', 3)
+            .style('fill-opacity', 0.9);
+            
+          // Prepare tooltip content
+          const sentimentInfo = `<br>Sentiment: ${d.sentimentCounts.positive} positive, ${d.sentimentCounts.negative} negative, ${d.sentimentCounts.neutral} neutral`;
+          
+          // Create keywords display (truncated)
+          const keywordsDisplay = d.keywords 
+            ? `<br><br>Keywords: ${d.keywords.length > 100 ? d.keywords.slice(0, 100) + '...' : d.keywords}` 
+            : '';
+            
+          // Create llama extract display (truncated)
+          const llamaExtract = d.llama_extract
+            ? `<br><br>Description: ${d.llama_extract.length > 100 ? d.llama_extract.slice(0, 100) + '...' : d.llama_extract}`
+            : '';
+          
+          // Show tooltip
+          tooltip
+            .html(`<strong>${d.text}</strong><br>
+                  Count: ${d.value}${sentimentInfo}${keywordsDisplay}${llamaExtract}`)
+            .style("opacity", 0.9)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 20) + "px");
+        })
+        .on('mouseout', function() {
+          // Restore circle style
+          d3.select(this)
+            .style('stroke-width', 2)
+            .style('fill-opacity', 0.7);
+            
+          // Hide tooltip
+          tooltip.style("opacity", 0);
+        })
+        .on('click', function(event, d) {
+          // Center view on the clicked node with a bit of zoom
+          const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(2.5)
+            .translate(-d.x, -d.y);
+            
+          wordCloudSvg.transition()
+            .duration(750)
+            .call(zoom.transform, transform);
+        });
+      
+      // Add text labels
+      nodes.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '.3em')
+        .attr('fill', '#333')
+        .style('font-weight', d => d.value > maxValue / 3 ? 'bold' : 'normal')
+        .style('pointer-events', 'none') // Make text not block clicks
+        .text(d => d.text)
+        .each(function(d) {
+          // Simple text sizing
+          const circle_radius = sizeScale(d.value) / 2;
+          const text = d3.select(this);
+          
+          // Set font size based on node size
+          const fontSize = Math.max(10, Math.min(circle_radius / 2, 16));
+          text.style('font-size', `${fontSize}px`);
+          
+          // Check if text is too wide
+          const textLength = this.getComputedTextLength();
+          const availableWidth = circle_radius * 1.8;
+          
+          if (textLength > availableWidth) {
+            // Truncate text if too long
+            let textContent = d.text;
+            while (textLength > availableWidth && textContent.length > 3) {
+              textContent = textContent.slice(0, -1);
+              text.text(textContent + '...');
+              if (this.getComputedTextLength() <= availableWidth) break;
+            }
+          }
+        });
+      
+      // Zoom handler function
+      function zoomed(event) {
+        activeZoom = event.transform;
+        zoomableGroup.attr("transform", activeZoom);
+      }
+    }
+
+    // Heatmap Visualization Module
+const HeatmapVisualizer = (function() {
+  // Private variables
+  let topicDetails = [];
+  let fullDataset = [];
+  let currentSentimentFilter = 'All';
+  let currentTopicFilter = 'All';
+  let processedData = [];
+  let isDataLoaded = false;
+  let isVisCreated = false;
+  
+  // Process data for heatmap visualization
+  function processData(data) {
+    document.getElementById('heatmap-loading').style.display = 'inline-block';
+    document.getElementById('heatmap-status').textContent = 'Processing data...';
+    
+    setTimeout(() => {
+      // Filter data based on current filters
+      let filteredData = [...data];
+      
+      // Apply sentiment filter if specified
+      if (currentSentimentFilter && currentSentimentFilter !== 'All') {
+        filteredData = filteredData.filter(row => {
+          return row.sentiment_label && 
+                row.sentiment_label.toLowerCase() === currentSentimentFilter.toLowerCase();
+        });
+      }
+      
+      // Apply topic filter if specified
+      if (currentTopicFilter && currentTopicFilter !== 'All') {
+        filteredData = filteredData.filter(row => {
+          const rowTopic = row.topic;
+          return rowTopic == currentTopicFilter; // Use loose equality for string/number comparison
+        });
+      }
+      
+      // Process filtered data
+      processedData = processHeatmapData(filteredData);
+      
+      // Update visualization
+      updateVisualization();
+      document.getElementById('heatmap-loading').style.display = 'none';
+      document.getElementById('heatmap-status').textContent = `Showing data for ${processedData.length} time periods`;
+      setTimeout(() => {
+        document.getElementById('heatmap-status').textContent = '';
+      }, 3000);
+    }, 10);
+  }
+  
+  // Process data for heatmap
+  function processHeatmapData(data) {
+    // Extract hours and dates from timestamps
+    const sentimentByHourAndDate = {};
+    
+    data.forEach(row => {
+      if (!row.timestamp) return;
+      
+      const timestamp = new Date(row.timestamp);
+      if (isNaN(timestamp)) return;
+      
+      // Format hour and date
+      const hour = timestamp.getHours();
+      const hourFormatted = `${hour}:00`;
+      
+      // Format as "MMM YYYY" for month-year
+      const date = new Date(timestamp);
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthYear = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      
+      // Create key for grouping
+      const key = `${hourFormatted}-${monthYear}`;
+      
+      // Initialize if not exists
+      if (!sentimentByHourAndDate[key]) {
+        sentimentByHourAndDate[key] = {
+          hour: hourFormatted,
+          monthYear: monthYear,
+          sentiments: {
+            positive: 0,
+            neutral: 0,
+            negative: 0
+          },
+          total: 0,
+          // Store topic counts
+          topics: {}
+        };
+      }
+      
+      // Determine sentiment category
+      let sentimentCategory = 'neutral';
+      if (row.sentiment_label) {
+        const label = String(row.sentiment_label).toLowerCase();
+        if (label.includes('positive')) {
+          sentimentCategory = 'positive';
+        } else if (label.includes('negative')) {
+          sentimentCategory = 'negative';
+        }
+      }
+      
+      // Increment counter for this sentiment
+      sentimentByHourAndDate[key].sentiments[sentimentCategory]++;
+      sentimentByHourAndDate[key].total++;
+      
+      // Count topics
+      const topicId = row.topic;
+      if (topicId !== undefined) {
+        sentimentByHourAndDate[key].topics[topicId] = (sentimentByHourAndDate[key].topics[topicId] || 0) + 1;
+      }
+    });
+    
+    // Convert to array and determine dominant sentiment
+    const heatmapData = Object.values(sentimentByHourAndDate).map(item => {
+      const sentiments = item.sentiments;
+      let dominantSentiment = 'neutral';
+      let maxCount = 0;
+      
+      Object.entries(sentiments).forEach(([sentiment, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantSentiment = sentiment;
+        }
+      });
+      
+      // Find dominant topic
+      let dominantTopic = 'unknown';
+      let maxTopicCount = 0;
+      
+      Object.entries(item.topics).forEach(([topicId, count]) => {
+        if (count > maxTopicCount) {
+          maxTopicCount = count;
+          dominantTopic = topicId;
+        }
+      });
+      
+      // Get topic name if available
+      let topicName = `Topic ${dominantTopic}`;
+      const topicDetail = topicDetails.find(t => t.Topic == dominantTopic);
+      if (topicDetail && topicDetail.Name) {
+        topicName = topicDetail.Name;
+      }
+      
+      return {
+        hour: item.hour,
+        monthYear: item.monthYear,
+        sentiment: dominantSentiment,
+        counts: sentiments,
+        total: item.total,
+        topicCounts: item.topics,
+        dominantTopic: dominantTopic,
+        topicName: topicName
+      };
+    });
+    
+    // Sort data for consistency
+    return heatmapData.sort((a, b) => {
+      // Sort by month-year first
+      const [monthA, yearA] = a.monthYear.split(' ');
+      const [monthB, yearB] = b.monthYear.split(' ');
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      
+      if (yearA !== yearB) return parseInt(yearA) - parseInt(yearB);
+      
+      const monthDiff = monthNames.indexOf(monthA) - monthNames.indexOf(monthB);
+      if (monthDiff !== 0) return monthDiff;
+      
+      // Then by hour
+      return parseInt(a.hour.split(':')[0]) - parseInt(b.hour.split(':')[0]);
+    });
+  }
+  
+  // Function to populate the topic selector
+  function populateTopicSelector(topics) {
+    const selector = document.getElementById('heatmap-topic-selector');
+    
+    // Clear existing options except the first one
+    while (selector.options.length > 1) {
+      selector.remove(1);
+    }
+    
+    // Sort topics by Count (descending) and then by Name
+    const sortedTopics = [...topics]
+      .filter(t => t.Count > 0)
+      .sort((a, b) => {
+        if (b.Count !== a.Count) return b.Count - a.Count;
+        return (a.Name || '').localeCompare(b.Name || '');
+      })
+      .slice(0, 50); // Limit to top 50 topics for performance
+    
+    // Use document fragment for better performance
+    const fragment = document.createDocumentFragment();
+    
+    // Add topic options
+    sortedTopics.forEach(topic => {
+      const option = document.createElement('option');
+      option.value = topic.Topic;
+      option.textContent = topic.Name ? `${topic.Name} (${topic.Count || 0})` : `Topic ${topic.Topic} (${topic.Count || 0})`;
+      fragment.appendChild(option);
+    });
+    
+    selector.appendChild(fragment);
+  }
+  
+  // Create visualization with optimized rendering
+  function updateVisualization() {
+    if (processedData.length === 0) {
+      d3.select("#heatmap-visualization").html(
+        '<div style="padding: 40px; text-align: center;">No data available with current filters</div>'
+      );
+      return;
+    }
+    
+    // Clear any existing chart
+    d3.select("#heatmap-visualization").selectAll("*").remove();
+    
+    // Extract unique hours and month-years
+    const uniqueHours = [...new Set(processedData.map(d => d.hour))]
+      .sort((a, b) => parseInt(a.split(':')[0]) - parseInt(b.split(':')[0]));
+    
+    const uniqueMonthYears = [...new Set(processedData.map(d => d.monthYear))]
+      .sort((a, b) => {
+        const [monthA, yearA] = a.split(' ');
+        const [monthB, yearB] = b.split(' ');
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        
+        if (yearA !== yearB) return parseInt(yearA) - parseInt(yearB);
+        return monthNames.indexOf(monthA) - monthNames.indexOf(monthB);
+      });
+    
+    // Set up chart dimensions with responsive sizing
+    const chartContainer = document.getElementById('heatmap-visualization');
+    const containerWidth = chartContainer.clientWidth || 900;
+    
+    const margin = { top: 40, right: 30, bottom: 140, left: 60 };
+    const width = Math.min(containerWidth - 60, Math.max(uniqueMonthYears.length * 40, 500)) - margin.left - margin.right;
+    const height = Math.min(500, Math.max(uniqueHours.length * 25, 300)) - margin.top - margin.bottom;
+    
+    // Create SVG with viewBox for better responsiveness
+    const svg = d3.select("#heatmap-visualization")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+      .attr("preserveAspectRatio", "xMidYMid meet")
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    // Create scales
+    const x = d3.scaleBand()
+      .domain(uniqueMonthYears)
+      .range([0, width])
+      .padding(0.05);
+    
+    const y = d3.scaleBand()
+      .domain(uniqueHours)
+      .range([0, height])
+      .padding(0.05);
+    
+    // Add X axis - use clipPath to prevent overflow
+    svg.append("defs")
+      .append("clipPath")
+      .attr("id", "clip-x-axis")
+      .append("rect")
+      .attr("width", width)
+      .attr("height", margin.bottom);
+    
+    const xAxis = svg.append("g")
+      .attr("class", "axis x-axis")
+      .attr("transform", `translate(0,${height})`)
+      .attr("clip-path", "url(#clip-x-axis)")
+      .call(d3.axisBottom(x));
+    
+    // Rotate the X axis labels
+    xAxis.selectAll("text")
+      .style("text-anchor", "end")
+      .attr("dx", "-.8em")
+      .attr("dy", ".15em")
+      .attr("transform", "rotate(-45)")
+      .style("font-size", "11px");
+    
+    // Add Y axis
+    svg.append("g")
+      .attr("class", "axis y-axis")
+      .call(d3.axisLeft(y));
+    
+    // Color scale for sentiments
+    const colorScale = d3.scaleOrdinal()
+      .domain(['positive', 'neutral', 'negative'])
+      .range(['#2ecc71', '#95a5a6', '#e74c3c']); // Green, Gray, Red - match dashboard colors
+    
+    // Create heatmap cells
+    svg.selectAll(".heatmap-cell")
+      .data(processedData)
+      .enter()
+      .append("rect")
+      .attr("class", "heatmap-cell")
+      .attr("x", d => x(d.monthYear))
+      .attr("y", d => y(d.hour))
+      .attr("width", x.bandwidth())
+      .attr("height", y.bandwidth())
+      .attr("fill", d => colorScale(d.sentiment))
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 0.5)
+      .on("mouseover", function(event, d) {
+        // Highlight cell
+        d3.select(this)
+          .attr("stroke", "#000")
+          .attr("stroke-width", 2);
+        
+        // Prepare topic information for tooltip
+        let topicInfo = '';
+        if (Object.keys(d.topicCounts).length > 0) {
+          // Get top 3 topics
+          const topTopics = Object.entries(d.topicCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3);
+          
+          if (topTopics.length > 0) {
+            topicInfo = '<br><strong>Top Topics:</strong><br>';
+            
+            topTopics.forEach(([topicId, count]) => {
+              // Get topic name if available
+              let topicName = `Topic ${topicId}`;
+              const topicDetail = topicDetails.find(t => t.Topic == topicId);
+              if (topicDetail && topicDetail.Name) {
+                topicName = topicDetail.Name;
+              }
+              
+              topicInfo += `${topicName}: ${count}<br>`;
+            });
+          }
+        }
+        
+        // Show tooltip
+        tooltip.transition()
+          .duration(200)
+          .style("opacity", .9);
+        
+        tooltip.html(`
+          <strong>${d.monthYear} at ${d.hour}</strong><br>
+          Dominant: ${d.sentiment} (${d.counts[d.sentiment] || 0})<br>
+          Positive: ${d.counts.positive || 0}<br>
+          Neutral: ${d.counts.neutral || 0}<br>
+          Negative: ${d.counts.negative || 0}<br>
+          Total: ${d.total}
+          ${topicInfo}
+        `)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 28) + "px");
+      })
+      .on("mouseout", function() {
+        // Restore cell appearance
+        d3.select(this)
+          .attr("stroke", "#fff")
+          .attr("stroke-width", 0.5);
+        
+        // Hide tooltip
+        tooltip.transition()
+          .duration(500)
+          .style("opacity", 0);
+      });
+    
+    // Add legend
+    const legendData = [
+      { label: "Positive", color: colorScale('positive') },
+      { label: "Neutral", color: colorScale('neutral') },
+      { label: "Negative", color: colorScale('negative') }
+    ];
+    
+    const legendWidth = 120 * legendData.length;
+    const legendStartX = (width - legendWidth) / 2;
+    
+    const legend = svg.append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${legendStartX}, ${height + 50})`);
+    
+    // Add legend items
+    legendData.forEach((d, i) => {
+      const g = legend.append("g")
+        .attr("transform", `translate(${i * 120}, 0)`)
+        .style("cursor", "pointer")
+        .on("click", function() {
+          // Set sentiment filter and update
+          currentSentimentFilter = d.label.toLowerCase();
+          document.getElementById("heatmap-sentiment-filter").value = currentSentimentFilter;
+          processData(fullDataset);
+        });
+      
+      g.append("rect")
+        .attr("width", 18)
+        .attr("height", 18)
+        .attr("fill", d.color)
+        .attr("rx", 3);
+      
+      g.append("text")
+        .attr("x", 26)
+        .attr("y", 14)
+        .text(d.label)
+        .attr("fill", "#333");
+    });
+    
+    // Add title
+    let titleText = "Topic Sentiment by Hour and Month";
+    
+    // If a specific topic is filtered, include it in the title
+    if (currentTopicFilter !== 'All') {
+      const topicDetail = topicDetails.find(t => t.Topic == currentTopicFilter);
+      if (topicDetail && topicDetail.Name) {
+        titleText = `${topicDetail.Name} - Sentiment by Hour and Month`;
+      }
+    }
+    
+    svg.append("text")
+      .attr("x", width / 2)
+      .attr("y", -20)
+      .attr("text-anchor", "middle")
+      .style("font-size", "14px")
+      .style("font-weight", "bold")
+      .text(titleText);
+    
+    // Set flag that visualization is created
+    isVisCreated = true;
+  }
+  
+  // Set up event listeners
+  function setupEventListeners() {
+    // Add event listener for sentiment filter
+    document.getElementById("heatmap-sentiment-filter").addEventListener("change", function() {
+      currentSentimentFilter = this.value;
+      processData(fullDataset);
+    });
+    
+    // Add event listener for topic filter
+    document.getElementById("heatmap-topic-selector").addEventListener("change", function() {
+      currentTopicFilter = this.value;
+      processData(fullDataset);
+    });
+    
+    // Handle window resize for responsive behavior
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (isVisCreated && processedData.length > 0) {
+          updateVisualization();
+        }
+      }, 250); // Debounce resize events
+    });
+  }
+  
+  // Initialize with data
+  function init(data, topics) {
+    fullDataset = data;
+    topicDetails = topics;
+    isDataLoaded = true;
+    
+    // Populate topic selector
+    populateTopicSelector(topics);
+    
+    // Set up event listeners
+    setupEventListeners();
+    
+    // Process data and create visualization
+    processData(data);
+  }
+  
+  // Return public API
+  return {
+    init: init,
+    update: processData
+  };
+})();
+
+// Modify the loadData function to initialize the heatmap
+const originalLoadData = loadData;
+loadData = async function() {
+  // Call the original function first
+  await originalLoadData();
+  
+  try {
+    // Now initialize the heatmap with the same data
+    // Get data from existing charts
+    let data = testData.sentiment;
+    
+    // Try to get topic data
+    let topicData = [];
+    try {
+      const response = await fetch('topic_detail_new.csv');
+      if (response.ok) {
+        const csvData = await response.text();
+        const parsed = Papa.parse(csvData, {
+          header: true,
+          skipEmptyLines: true,
+          dynamicTyping: true
+        });
+        topicData = parsed.data;
+      }
+    } catch (e) {
+      console.warn("Could not load topic data for heatmap:", e);
+      // Create basic topic data if we couldn't load it
+      topicData = Array.from({ length: 20 }, (_, i) => ({
+        Topic: i + 1,
+        Name: `Topic ${i + 1}`,
+        Count: Math.floor(Math.random() * 1000) + 100
+      }));
+    }
+    
+    // Initialize heatmap
+    HeatmapVisualizer.init(data, topicData);
+    
+    // Update the updateCharts function to also update the heatmap
+    const originalUpdateCharts = updateCharts;
+    updateCharts = function() {
+      originalUpdateCharts();
+      
+      const startDate = new Date(document.getElementById('startDate').value);
+      const endDate = new Date(document.getElementById('endDate').value);
+      const selectedSentiment = document.getElementById('sentimentFilter').value;
+      
+      // Filter data - date filtering
+      let filteredData = testData.sentiment.filter(d => {
+        return d.timestamp >= startDate && d.timestamp <= endDate;
+      });
+      
+      // Sentiment category filtering
+      if (selectedSentiment !== 'all') {
+        filteredData = filteredData.filter(d => {
+          return d.sentiment_label === selectedSentiment;
+        });
+      }
+      
+      // Update heatmap with filtered data
+      HeatmapVisualizer.update(filteredData);
+    };
+    
+  } catch (e) {
+    console.error("Error initializing heatmap:", e);
+  }
+};
+  </script>
+</body>
+</html>
