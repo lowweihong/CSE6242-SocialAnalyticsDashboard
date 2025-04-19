@@ -31,7 +31,7 @@ No installation is required to run the dashboard on the pre-generated data. Simp
 1. Download the three CSV files from the provided link.
 2. Place the CSV files in the same folder as Final.html, within the CODE/ directory.
 3. Open a terminal and navigate to the CODE/ directory:
-    `1cd CODE1`
+    `cd CODE1`
 4. Start a local HTTP server:
     `python -m http.server`
 5. Open your web browser and go to http://localhost:8000/Final.html to launch the dashboard.
