@@ -1,0 +1,7 @@
+pandas==2.2.3
+transformers==4.50.1
+cupy==13.4.1
+torch==2.6.0
+bertopic==0.17.0
+sentence-transformers==4.1.0
+transformers==4.50.1
