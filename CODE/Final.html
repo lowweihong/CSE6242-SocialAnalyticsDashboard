@@ -706,17 +706,29 @@
        .attr("d", line);
     
     // 添加数据点标记
-    svg.selectAll(".dot")
-       .data(aggregatedData)
-       .enter()
-       .append("circle")
-       .attr("class", "dot")
-       .attr("cx", d => x(d.timestamp))
-       .attr("cy", d => y(d.sentiment))
-       .attr("r", 3)
-       .style("fill", d => getSentimentColor(d.sentiment))
-       .style("stroke", "#fff")
-       .style("stroke-width", 1);
+    // svg.selectAll(".dot")
+    //    .data(aggregatedData)
+    //    .enter()
+    //    .append("circle")
+    //    .attr("class", "dot")
+    //    .attr("cx", d => x(d.timestamp))
+    //    .attr("cy", d => y(d.sentiment))
+    //    .attr("r", 3)
+    //    .style("fill", d => getSentimentColor(d.sentiment))
+    //    .style("stroke", "#fff")
+    //    .style("stroke-width", 1);
+    svg.append("rect")
+    .attr("class", "overlay")
+    .attr("width", width)
+    .attr("height", height)
+    .style("fill", "none")
+    .style("pointer-events", "all")
+    .on("mouseover", () => focus.style("display", null))
+    .on("mouseout", () => {
+      focus.style("display", "none");
+      tooltip.transition().duration(300).style("opacity", 0);
+    })
+    .on("mousemove", mousemove);
 
     // Add interactive elements
     const focus = svg.append("g")
