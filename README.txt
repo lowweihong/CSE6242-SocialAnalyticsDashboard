@@ -12,26 +12,44 @@ CONTENTS OF THIS FILE
 -----------
 DESCRIPTION
 -----------
-This package is the project by team 37 from CSE 6242 @ Georgia Tech Spring 2025. 
-The project is about "Social Analytics Dashboard For Bitcoin Related Discussion". 
-The package contains 1 python file `topic.py`, 1 `Final.html` file, and 3 csv files (combined_df_new.csv, out_40k.csv, topic_detail_new.csv)
-The 3 csv files can be downloaded here (access required with Georgia Tech email): https://gtvault-my.sharepoint.com/:f:/g/personal/wlow7_gatech_edu/EmGIhEWNIW5JutheZH5su48BHsg_ckNkBhO3Bly8rJZtNg?e=8CA1ks
+This package is the project submission by Team 37 for CSE 6242 at Georgia Tech, Spring 2025. The project, titled "Social Analytics Dashboard for Bitcoin-Related Discussion", focuses on analyzing and visualizing public discourse surrounding Bitcoin on X platforms. By leveraging topic modeling and interactive visualization techniques, this dashboard aims to provide insights into trends, sentiment, and key discussion themes over time.
+
+The package includes the following files:
+1. topic.py: A Python script for topic modeling and CSV generation.
+2. Final.html: A pre-built interactive dashboard for exploring the processed data.
+4. Three CSV files containing the dataset used by the dashboard:
+    - combined_df_new.csv
+    - out_40k.csv
+    - topic_detail_new.csv
+Due to data access policies, the CSV files are hosted on a Georgia Tech-accessible link:https://gtvault-my.sharepoint.com/:f:/g/personal/wlow7_gatech_edu/EmGIhEWNIW5JutheZH5su48BHsg_ckNkBhO3Bly8rJZtNg?e=8CA1ks
 
 ------------
 INSTALLATION
 ------------
-There is no specific installation to run these files with the generated csv file. 
-To run the dashboard, 
-1. please make sure you have the 3 csv files downloaded and place at the same directory in directory CODE.
-2. navigate to `CODE/`
-3. run `python -m http.server`
-4. Use your browser to browse to `http://localhost:8000/Final.html`
+No installation is required to run the dashboard on the pre-generated data. Simply follow the steps below:
 
-However, to generate CSV file on a new dataset, run `python topic.py` (note: need to be ran in a device with GPU). 
-Make sure you have installed all the requirements in `requirements.txt` with `pip install -r requirements.txt`.
+1. Download the three CSV files from the provided link.
+2. Place the CSV files in the same folder as Final.html, within the CODE/ directory.
+3. Open a terminal and navigate to the CODE/ directory:
+    `1cd CODE1`
+4. Start a local HTTP server:
+    `python -m http.server`
+5. Open your web browser and go to http://localhost:8000/Final.html to launch the dashboard.
+
+To generate the CSV files from a new dataset:
+1. Ensure you have a compatible environment with GPU support.
+2. Install the required Python packages:
+    `pip install -r requirements.txt`
+3. Run the topic modeling script:
+    `python topic.py --input_path <you filepath>`
 
 ---------
 EXECUTION
 ---------
-The dashboard will be displayed on the first page. Once all the 4 graphs loaded,
-you may use the filter function, and hover to each of the datapoints to have a closer look.
+Once the dashboard is launched in your browser, the main visualization page will be displayed. Wait for all four graphs to load completely. From there, you can:
+
+1. Use filters to narrow down topics or time ranges.
+2. Hover over data points for detailed insights.
+3. Explore trends in Bitcoin-related discussions with an intuitive and interactive interface.
+
+This dashboard is designed to support real-time exploration and analysis, making it a powerful tool for social analytics in the cryptocurrency space.
