@@ -16,7 +16,8 @@ This package is the project submission by Team 37 for CSE 6242 at Georgia Tech, 
 
 The package includes the following files:
 1. topic.py: A Python script for topic modeling and CSV generation.
-2. Final.html: A pre-built interactive dashboard for exploring the processed data.
+2. lang_sentiment.py: A python script for generating sentiments and detect language.
+3. Final.html: A pre-built interactive dashboard for exploring the processed data.
 4. Three CSV files containing the dataset used by the dashboard:
     - combined_df_new.csv
     - out_40k.csv
@@ -36,12 +37,19 @@ No installation is required to run the dashboard on the pre-generated data. Simp
     `python -m http.server`
 5. Open your web browser and go to http://localhost:8000/Final.html to launch the dashboard.
 
-To generate the CSV files from a new dataset:
+To generate the CSV files from a new dataset for topic detail:
 1. Ensure you have a compatible environment with GPU support.
 2. Install the required Python packages:
     `pip install -r requirements.txt`
 3. Run the topic modeling script:
-    `python topic.py --input_path <you filepath>`
+    `python topic.py --input_path <you_filepath>`
+
+To generate the CSV files from a new dataset for sentiment and detect language:
+1. Ensure you have a compatible environment with GPU support.
+2. Install the required Python packages:
+    `pip install -r requirements.txt`
+3. Run the topic modeling script:
+    `python lang_sentiment.py --input_path <you_filepath> --output_path <output_filepath>`
 
 ---------
 EXECUTION
