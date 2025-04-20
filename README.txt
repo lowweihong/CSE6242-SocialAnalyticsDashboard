@@ -15,10 +15,11 @@ DESCRIPTION
 This package is the project submission by Team 37 for CSE 6242 at Georgia Tech, Spring 2025. The project, titled "Social Analytics Dashboard for Bitcoin-Related Discussion", focuses on analyzing and visualizing public discourse surrounding Bitcoin on X platforms. By leveraging topic modeling and interactive visualization techniques, this dashboard aims to provide insights into trends, sentiment, and key discussion themes over time.
 
 The package includes the following files:
-1. topic.py: A Python script for topic modeling and CSV generation.
-2. lang_sentiment.py: A python script for generating sentiments and detect language.
-3. Final.html: A pre-built interactive dashboard for exploring the processed data.
-4. Three CSV files containing the dataset used by the dashboard:
+1. requirements.txt: Lists all Python package dependencies required to run the topic modeling and sentiment analysis scripts.
+2. topic.py: A Python script for topic modeling and CSV generation.
+3. lang_sentiment.py: A python script for generating sentiments and detect language.
+4. Final.html: A pre-built interactive dashboard for exploring the processed data.
+5. Three CSV files containing the dataset used by the dashboard:
     - combined_df_new.csv
     - out_40k.csv
     - topic_detail_new.csv
